@@ -40,7 +40,7 @@ void GotoXY(int x, int y) {
 
 //Hằng số
 #define MAX_CAR 17
-#define MAX_CAR_LENGTH 10
+#define MAX_CAR_LENGTH 3
 #define MAX_SPEED 3
 //Biến toàn cục
 POINT* *X; //Mảng chứa MAX_CAR xe
@@ -48,14 +48,19 @@ POINT Y; // Đại diện người qua đường
 int cnt = 0;//Biến hỗ trợ trong quá trình tăng tốc độ xe di chuyển
 int MOVING;//Biến xác định hướng di chuyển của người
 int SPEED;// Tốc độ xe chạy (xem như level)
-int HEIGH_CONSOLE = 20, WIDTH_CONSOLE = 50;// Độ rộng và độ cao của màn hình console
+int HEIGH_CONSOLE = 20, WIDTH_CONSOLE = 100;// Độ rộng và độ cao của màn hình console
 bool STATE; // Trạng thái sống/chết của người qua đường
+int i;
+int *ToaDo = NULL;
 
 //Hàm khởi tạo dữ liệu mặc định ban đầu
 void ResetData() {
+	i = 0;
+	ToaDo = (int*)malloc(i * sizeof(int));
 	MOVING = 'D'; // Ban đầu cho người di chuyển sang phải
-	SPEED = 0.5; // Tốc độ lúc đầu
-	Y = { 18, 19 }; // Vị trí lúc đầu của người
+	SPEED = 1; // Tốc độ lúc đầu
+	Y.x = 18;              // rand() % (a - b) + b;
+	Y.y = 19; // Vị trí lúc đầu của người
 	// Tạo mảng xe chạy
 	if (X == NULL) {
 		X = new POINT*[MAX_CAR];
@@ -105,6 +110,7 @@ void GabageCollect()
 		delete[] X[i];
 	}
 	delete[] X;
+	free(ToaDo);
 }
 //Hàm thoát game
 void ExitGame(HANDLE t) {
@@ -127,10 +133,9 @@ void ProcessDead() {
 }
 //Hàm xử lý khi người băng qua đường thành công
 void ProcessFinish(POINT& p) {
-	SPEED == MAX_SPEED ? SPEED = 1 : SPEED+=0.3;
+	SPEED == MAX_SPEED ? SPEED = 1 : SPEED++;
 	p = { 18, 19 }; // Vị trí lúc đầu của người
 	MOVING = 'D'; // Ban đầu cho người di chuyển sang phải
-
 }
 
 //Hàm vẽ các toa xe
@@ -255,6 +260,18 @@ void MoveUp() {
 
 }
 
+void XuLyVaChamNguoi(POINT &p)
+{
+	ToaDo = (int*)realloc(ToaDo, (i + 1)*sizeof(int));
+	ToaDo[i] = p.x;
+	i++;
+	for (int j = 0; j < i - 1; j++)
+	{
+		if (p.x == ToaDo[j])
+			STATE = 0;
+	}
+}
+
 void SubThread()
 {
 	while (1) {
@@ -278,54 +295,78 @@ void SubThread()
 			MOVING = ' ';// Tạm khóa không cho di chuyển, chờ nhận phím từ hàm main
 			EraseCars();
 			MoveCars();
-			DrawCars(" ");
+			DrawCars(".");
 			if (IsImpact(Y, Y.y))
 			{
 				ProcessDead(); // Kiểm tra xe có đụng không
 			}
 			if (Y.y == 1)
-				ProcessFinish(Y); // Kiểm tra xem về đích chưa
+			{
+				XuLyVaChamNguoi(Y);
+				if (STATE == 0)
+				{
+					GotoXY(0, HEIGH_CONSOLE + 2);
+					printf("Dead, press 'E' to continue or anykey to continue");
+
+				}
+				ProcessFinish(Y);// Kiểm tra xem về đích chưa
+			}
 			Sleep(70);//Hàm ngủ theo tốc độ SPEED
 		}
 
 	}
 }
 
-void XuLyVaChamNguoi()
-{
-	STATE = 0;
 
-}
 
-void SaveGame(int width,int heigh)
+void SaveGame()
 {
 	char filename[30];
-	GotoXY(WIDTH_CONSOLE + 2, 10);
+	GotoXY(0, HEIGH_CONSOLE + 3);
 	printf("Enter name of file you want to save game : ");
 	gets(filename);
 	strcat(filename, ".txt");
 	FILE* fp = fopen(filename, "w");
-	GotoXY(1, 1);
+	GotoXY(0, 0);
 	char ch;
-	for (int i = 0; i < width; i++)
+	fprintf(fp, "%d ", SPEED);
+	for (int j = 0; j < i; j++)
 	{
-		getc(stdout);
-		if (ch == 'Y')
-			fprintf(fp,"%d ", i);
+		fprintf(fp, "%d ", ToaDo[j]);
 	}
-	fprintf(fp, "Tung");
+	fclose(fp);
+}
+
+void LoadGame(int &SPEED)
+{
+	char filename[30];
+	GotoXY(0, HEIGH_CONSOLE + 3);
+	printf("Enter name of file you want to load game : ");
+	scanf("%s", filename);
+	GotoXY(0, 0);
+	strcat(filename, ".txt");
+	FILE* fp = fopen(filename, "w");
+	
+	fscanf(fp, "%d", &SPEED);
+	char ch;
+	while (!feof(fp))
+	{
+		fscanf(fp, "%d", &ch);
+		GotoXY(1 + ch, 1);
+		printf("Y");
+		ch = fgetc(fp);
+		GotoXY(0, 0);
+	}
 	fclose(fp);
 }
 
 void main()
 {
 	int temp;
-	FixConsoleWindow();
+	//FixConsoleWindow();
 	srand(time(NULL));
 	StartGame();
 	thread t1(SubThread);
-	/*GotoXY(WIDTH_CONSOLE + 20, HEIGH_CONSOLE);
-	printf("Enter name of file you want to save game : ");*/
 	while (1)
 	{
 		temp = toupper(getch());
@@ -343,14 +384,12 @@ void main()
 			else if (temp == 'L')
 			{
 				PauseGame(t1.native_handle());
-				SaveGame(WIDTH_CONSOLE, HEIGH_CONSOLE);
-				ResumeThread((HANDLE)t1.native_handle());
-				if (temp == 'D' || temp == 'A' || temp == 'W' || temp == 'S')
-				{
-					MOVING = temp;
-				}
-				GotoXY(WIDTH_CONSOLE + 2, 10);
-				printf("                                                                       ");
+				SaveGame();
+			}
+			else if (temp == 'T')
+			{
+				PauseGame(t1.native_handle());
+				LoadGame(SPEED);
 			}
 			else
 			{
